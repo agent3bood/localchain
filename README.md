@@ -1,4 +1,13 @@
-## LocalChain
+# LocalChain
+
+## Overview
+
+A simple UI tool to run and manage local blockchain nodes.
+
+- [x] Multiple chains
+- [x] Ethereum, using [Anvil](https://getfoundry.sh/anvil/overview/)
+
+## Development
 
 Monorepo with an Axum server and a Leptos client.
 
@@ -10,6 +19,7 @@ Monorepo with an Axum server and a Leptos client.
 ### Project layout
 - `server/`: Axum HTTP server serving API and static client assets
 - `client/`: Leptos CSR app built with Trunk to `client/dist`
+- `shared/`: Shared types between server and client
 
 ### First-time setup
 ```bash
@@ -48,4 +58,5 @@ cd client && trunk serve --port 8080
 cargo run -p server
 ```
 
-For the server to serve built assets, run `trunk build` at least once.
+TODO: 
+- Configure server base url for client; this is needed to enable dev mode
