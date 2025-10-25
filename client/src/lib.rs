@@ -10,6 +10,7 @@ use shared::{ChainConfig, ChainStatus};
 #[component]
 pub fn App() -> impl IntoView {
     let (show_modal, set_show_modal) = create_signal(false);
+    let (modal_config, set_modal_config) = create_signal::<Option<ChainConfig>>(None);
     let (chains, set_chains) = create_signal::<Vec<ChainConfig>>(vec![]);
     let (loading, set_loading) = create_signal(false);
     let (error_msg, set_error_msg) = create_signal::<Option<String>>(None);
@@ -49,7 +50,7 @@ pub fn App() -> impl IntoView {
 
     view! {
         <main style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, Apple Color Emoji, Segoe UI Emoji;">
-            <TopBar set_show_modal=set_show_modal />
+            <TopBar set_show_modal=set_show_modal set_modal_config=set_modal_config />
             {move || error_msg.get().map(|e| view!{ <div style="margin:8px; padding:8px; color:#842029; background:#f8d7da; border:1px solid #f5c2c7; border-radius:6px;">{e}</div> })}
             {move || if loading.get() { Some(view!{ <div style="margin:8px;">{"Loading..."}</div> }) } else { None }}
             <div style="display:flex; gap:16px; overflow-x:auto; padding:16px;">
@@ -68,6 +69,7 @@ pub fn App() -> impl IntoView {
                         Rc::new(move || set_show_modal.set(false))
                     };
                     let on_created: Rc<dyn Fn(String)> = Rc::new(move |id| on_created(id));
+                    let config = modal_config.get();
                     view!{ <NewChainModal existing_names=existing on_close=on_close on_created=on_created /> }
                 })
             }}
@@ -151,11 +153,28 @@ pub fn attach_log_handlers(
 // --- UI Components ---
 
 #[component]
-fn TopBar(set_show_modal: WriteSignal<bool>) -> impl IntoView {
+fn TopBar(set_show_modal: WriteSignal<bool>, set_modal_config: WriteSignal<Option<ChainConfig>>) -> impl IntoView {
     view! {
         <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid #e5e7eb; position:sticky; top:0; background:#fff; z-index:10;">
             <div style="font-weight:600; font-size:18px;">{"Local Chain"}</div>
-            <button on:click=move |_| set_show_modal.set(true) style="background:#2563eb; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer;">{"New Chain"}</button>
+            <div style="display:flex; gap:8px;">
+                <button on:click=move |_| {
+                    set_modal_config.set(Some(ChainConfig {
+                        name: "Ethereum".to_string(),
+                        chain_id: 1,
+                        port: 8545,
+                        block_time: 1,
+                        status: ChainStatus::Stopped,
+                    }));
+                    set_show_modal.set(true);
+                } style="background:none; border:none; padding:8px; border-radius:6px; cursor:pointer;">
+                    <img src="/assets/ethereum_logo.svg" alt="New Ethereum Chain" style="width:32px; height:32px;" />
+                </button>
+                <button on:click=move |_| {
+                    set_modal_config.set(None);
+                    set_show_modal.set(true);
+                } style="background:#2563eb; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer;">{"New Chain"}</button>
+            </div>
         </div>
     }
 }

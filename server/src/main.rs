@@ -15,11 +15,7 @@ use futures::Stream;
 use shared::{ChainConfig, ChainStatus};
 use std::convert::Infallible;
 use std::pin::Pin;
-use tokio::{
-    io::{AsyncBufReadExt, BufReader},
-    process::{Child, Command},
-    sync::{broadcast, Mutex},
-};
+use tokio::sync::{broadcast, Mutex};
 use tokio_stream::{wrappers::BroadcastStream, StreamExt};
 use tower_http::services::ServeDir;
 
