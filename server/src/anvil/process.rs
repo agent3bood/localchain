@@ -1,7 +1,8 @@
-use std::process::Stdio;
+use std::{process::Stdio, sync::Arc};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::{Child, Command},
+    sync::broadcast,
     task::JoinHandle,
 };
 
@@ -12,10 +13,17 @@ pub struct AnvilProcess {
     pub block_time: u64,
     child: Option<Child>,
     pub log_handles: Vec<JoinHandle<()>>,
+    pub log_tx: Arc<broadcast::Sender<String>>,
 }
 
 impl AnvilProcess {
-    pub fn new(name: String, chain_id: u64, port: u16, block_time: u64) -> Self {
+    pub fn new(
+        name: String,
+        chain_id: u64,
+        port: u16,
+        block_time: u64,
+        log_tx: Arc<broadcast::Sender<String>>,
+    ) -> Self {
         Self {
             name,
             chain_id,
@@ -23,6 +31,7 @@ impl AnvilProcess {
             block_time,
             child: None,
             log_handles: Vec::new(),
+            log_tx,
         }
     }
 
@@ -45,22 +54,24 @@ impl AnvilProcess {
         cmd.stdout(Stdio::piped()).stderr(Stdio::piped());
 
         let mut child = cmd.spawn().map_err(|e| e.to_string())?;
+        let log_tx = self.log_tx.clone();
 
         if let Some(stdout) = child.stdout.take() {
             let mut reader = BufReader::new(stdout).lines();
             let handle = tokio::spawn(async move {
                 while let Ok(Some(line)) = reader.next_line().await {
-                    println!("[stdout] {}", line);
+                    let _ = log_tx.send(format!("[stdout] {}", line));
                 }
             });
             self.log_handles.push(handle);
         }
 
+        let log_tx = self.log_tx.clone();
         if let Some(stderr) = child.stderr.take() {
             let mut reader = BufReader::new(stderr).lines();
             let handle = tokio::spawn(async move {
                 while let Ok(Some(line)) = reader.next_line().await {
-                    println!("[stderr] {}", line);
+                    let _ = log_tx.send(format!("[stderr] {}", line));
                 }
             });
             self.log_handles.push(handle);

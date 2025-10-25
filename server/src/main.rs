@@ -32,7 +32,7 @@ struct AppState {
 struct ChainEntry {
     id: String,
     config: ChainConfig,
-    log_tx: broadcast::Sender<String>,
+    log_tx: Arc<broadcast::Sender<String>>,
     process: AnvilProcess,
 }
 
@@ -53,18 +53,23 @@ impl ChainsManager {
             return Err("name already exists".into());
         }
         let (tx, _rx) = broadcast::channel(1024);
-        let process = AnvilProcess::new(cfg.name.clone(), cfg.chain_id, cfg.port, cfg.block_time);
+        let log_tx = Arc::new(tx);
+        let process = AnvilProcess::new(
+            cfg.name.clone(),
+            cfg.chain_id,
+            cfg.port,
+            cfg.block_time,
+            log_tx.clone(),
+        );
         let entry = ChainEntry {
             id: cfg.name.clone(),
             config: cfg,
-            log_tx: tx,
+            log_tx: log_tx,
             process: process,
         };
         let id = entry.id.clone();
         map.insert(id.clone(), entry);
         drop(map);
-        // start immediately
-        self.start(&id).await?;
         Ok(id)
     }
 
@@ -74,9 +79,16 @@ impl ChainsManager {
             return Err("not found".into());
         };
         entry.config.status = ChainStatus::Starting;
-        entry.process.start().await?;
-
-        Ok(())
+        match entry.process.start().await {
+            Ok(()) => {
+                entry.config.status = ChainStatus::Running;
+                Ok(())
+            }
+            Err(e) => {
+                entry.config.status = ChainStatus::Error;
+                Err(e)
+            }
+        }
     }
 
     async fn stop(&self, id: &str) -> Result<(), String> {
