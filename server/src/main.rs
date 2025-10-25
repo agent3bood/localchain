@@ -96,15 +96,33 @@ impl ChainsManager {
         let Some(entry) = map.get_mut(id) else {
             return Err("not found".into());
         };
-        entry.process.stop().await?;
-        entry.config.status = ChainStatus::Stopped;
-        let _ = entry.log_tx.send("[manager] stopped".into());
-        Ok(())
+        match entry.process.stop().await {
+            Ok(()) => {
+                entry.config.status = ChainStatus::Stopped;
+                let _ = entry.log_tx.send("[manager] stopped".into());
+                Ok(())
+            }
+            Err(e) => {
+                entry.config.status = ChainStatus::Error;
+                Err(e)
+            }
+        }
     }
 
     async fn restart(&self, id: &str) -> Result<(), String> {
         self.stop(id).await?;
-        self.start(id).await
+        self.start(id).await?;
+        Ok(())
+    }
+
+    async fn delete(&self, id: &str) -> Result<(), String> {
+        let mut map = self.inner.lock().await;
+        let Some(entry) = map.get_mut(id) else {
+            return Err("not found".into());
+        };
+        entry.process.stop().await?;
+        map.remove(id);
+        Ok(())
     }
 
     async fn subscribe_logs(&self, id: &str) -> Result<broadcast::Receiver<String>, String> {
@@ -142,6 +160,7 @@ async fn main() {
         .route("/api/chains/:id/start", post(start_chain))
         .route("/api/chains/:id/stop", post(stop_chain))
         .route("/api/chains/:id/restart", post(restart_chain))
+        .route("/api/chains/:id/delete", post(delete_chain))
         .route("/api/chains/:id/logstream", get(log_stream))
         // index route serves the built client index.html
         .route("/", get(index))
@@ -204,6 +223,13 @@ async fn stop_chain(State(state): State<AppState>, Path(id): Path<String>) -> im
 
 async fn restart_chain(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
     match state.manager.restart(&id).await {
+        Ok(()) => (StatusCode::OK).into_response(),
+        Err(e) => (StatusCode::BAD_REQUEST, e).into_response(),
+    }
+}
+
+async fn delete_chain(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
+    match state.manager.delete(&id).await {
         Ok(()) => (StatusCode::OK).into_response(),
         Err(e) => (StatusCode::BAD_REQUEST, e).into_response(),
     }

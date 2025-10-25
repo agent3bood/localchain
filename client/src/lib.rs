@@ -310,6 +310,7 @@ fn ChainColumn(chain: ChainConfig, on_action: Rc<dyn Fn(&'static str)>) -> impl 
                     { let on_action = on_action.clone(); view!{ <button disabled=move || !can_start on:click=move |_| on_action("start") style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;">{"Start"}</button> } }
                     { let on_action = on_action.clone(); view!{ <button disabled=move || !can_stop on:click=move |_| on_action("stop") style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;">{"Stop"}</button> } }
                     { let on_action = on_action.clone(); view!{ <button disabled=move || !can_restart on:click=move |_| on_action("restart") style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;">{"Restart"}</button> } }
+                    { let on_action = on_action.clone(); view! { <button on:click=move |_| on_action("delete") style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;">{"Delete"}</button> } }
                     <button on:click=move |_| set_show_info.update(|v| *v = !*v) style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;">{"Info"}</button>
                     <button on:click=move |_| set_logs.set(vec![]) style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;">{"Clear Log"}</button>
                 </div>
