@@ -26,7 +26,7 @@ struct AppState {
 }
 
 struct ChainEntry {
-    id: String,
+    id: u64,
     config: ChainConfig,
     log_tx: Arc<broadcast::Sender<String>>,
     process: AnvilProcess,
@@ -34,7 +34,8 @@ struct ChainEntry {
 
 #[derive(Default)]
 struct ChainsManager {
-    inner: Mutex<HashMap<String, ChainEntry>>, // key: chain id (name)
+    /// id: ChainEntry
+    inner: Mutex<HashMap<u64, ChainEntry>>,
 }
 
 impl ChainsManager {
@@ -43,33 +44,33 @@ impl ChainsManager {
         map.values().map(|c| c.config.clone()).collect()
     }
 
-    async fn create(&self, cfg: ChainConfig) -> Result<String, String> {
+    async fn create(&self, cfg: ChainConfig) -> Result<u64, String> {
         let mut map = self.inner.lock().await;
-        if map.contains_key(&cfg.name) {
+        if map.contains_key(&cfg.id) {
             return Err("name already exists".into());
         }
         let (tx, _rx) = broadcast::channel(1024);
         let log_tx = Arc::new(tx);
         let process = AnvilProcess::new(
             cfg.name.clone(),
-            cfg.chain_id,
+            cfg.id,
             cfg.port,
             cfg.block_time,
             log_tx.clone(),
         );
         let entry = ChainEntry {
-            id: cfg.name.clone(),
+            id: cfg.id,
             config: cfg,
             log_tx: log_tx,
             process: process,
         };
         let id = entry.id.clone();
-        map.insert(id.clone(), entry);
+        map.insert(id, entry);
         drop(map);
         Ok(id)
     }
 
-    async fn start(&self, id: &str) -> Result<(), String> {
+    async fn start(&self, id: &u64) -> Result<(), String> {
         let mut map = self.inner.lock().await;
         let Some(entry) = map.get_mut(id) else {
             return Err("not found".into());
@@ -87,7 +88,7 @@ impl ChainsManager {
         }
     }
 
-    async fn stop(&self, id: &str) -> Result<(), String> {
+    async fn stop(&self, id: &u64) -> Result<(), String> {
         let mut map = self.inner.lock().await;
         let Some(entry) = map.get_mut(id) else {
             return Err("not found".into());
@@ -105,13 +106,13 @@ impl ChainsManager {
         }
     }
 
-    async fn restart(&self, id: &str) -> Result<(), String> {
+    async fn restart(&self, id: &u64) -> Result<(), String> {
         self.stop(id).await?;
         self.start(id).await?;
         Ok(())
     }
 
-    async fn delete(&self, id: &str) -> Result<(), String> {
+    async fn delete(&self, id: &u64) -> Result<(), String> {
         let mut map = self.inner.lock().await;
         let Some(entry) = map.get_mut(id) else {
             return Err("not found".into());
@@ -121,7 +122,7 @@ impl ChainsManager {
         Ok(())
     }
 
-    async fn subscribe_logs(&self, id: &str) -> Result<broadcast::Receiver<String>, String> {
+    async fn subscribe_logs(&self, id: &u64) -> Result<broadcast::Receiver<String>, String> {
         let map = self.inner.lock().await;
         let Some(entry) = map.get(id) else {
             return Err("not found".into());
@@ -203,28 +204,28 @@ async fn create_chain(
     }
 }
 
-async fn start_chain(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
+async fn start_chain(State(state): State<AppState>, Path(id): Path<u64>) -> impl IntoResponse {
     match state.manager.start(&id).await {
         Ok(()) => (StatusCode::OK).into_response(),
         Err(e) => (StatusCode::BAD_REQUEST, e).into_response(),
     }
 }
 
-async fn stop_chain(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
+async fn stop_chain(State(state): State<AppState>, Path(id): Path<u64>) -> impl IntoResponse {
     match state.manager.stop(&id).await {
         Ok(()) => (StatusCode::OK).into_response(),
         Err(e) => (StatusCode::BAD_REQUEST, e).into_response(),
     }
 }
 
-async fn restart_chain(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
+async fn restart_chain(State(state): State<AppState>, Path(id): Path<u64>) -> impl IntoResponse {
     match state.manager.restart(&id).await {
         Ok(()) => (StatusCode::OK).into_response(),
         Err(e) => (StatusCode::BAD_REQUEST, e).into_response(),
     }
 }
 
-async fn delete_chain(State(state): State<AppState>, Path(id): Path<String>) -> impl IntoResponse {
+async fn delete_chain(State(state): State<AppState>, Path(id): Path<u64>) -> impl IntoResponse {
     match state.manager.delete(&id).await {
         Ok(()) => (StatusCode::OK).into_response(),
         Err(e) => (StatusCode::BAD_REQUEST, e).into_response(),
@@ -233,7 +234,7 @@ async fn delete_chain(State(state): State<AppState>, Path(id): Path<String>) -> 
 
 async fn log_stream(
     State(state): State<AppState>,
-    Path(id): Path<String>,
+    Path(id): Path<u64>,
 ) -> Sse<impl Stream<Item = Result<sse::Event, Infallible>>> {
     let stream: Pin<Box<dyn Stream<Item = Result<sse::Event, Infallible>> + Send>> =
         match state.manager.subscribe_logs(&id).await {

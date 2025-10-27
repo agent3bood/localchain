@@ -8,14 +8,20 @@ crate-type = ["cdylib"]
 
 [dependencies]
 shared = { path = "../shared" }
-leptos = { version = "0.8.10", features = ["csr"] }
+leptos = { version = "0.8", features = ["csr"] }
+leptos-use = { version = "0.16", features = ["use_event_source"] }
 wasm-bindgen = "0.2"
 console_error_panic_hook = "0.1"
-gloo-net = { version = "0.5", features = ["http"] }
+gloo = { workspace=true }
+gloo-net = { workspace=true , features = ["http"] }
+# TODO: replace with gloo
 web-sys = { version = "0.3", features = ["EventSource", "MessageEvent"] }
+# TODO: replace with gloo
 js-sys = "0.3"
 serde = { workspace = true }
 serde_json = { workspace = true }
+once_cell = { workspace = true }
+futures-util = { workspace = true }
 
 [package.metadata.trunk]
 public_url = "/"
