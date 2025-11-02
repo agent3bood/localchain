@@ -1,6 +1,6 @@
 use gloo_net::{eventsource::futures::EventSource, http::Request};
 use once_cell::sync::OnceCell;
-use shared::ChainConfig;
+use shared::types::chain_config::ChainConfig;
 use std::sync::Arc;
 
 static INSTANCE: OnceCell<Arc<Api>> = OnceCell::new();
