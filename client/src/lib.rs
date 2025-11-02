@@ -1,7 +1,7 @@
 use crate::api::client::Api;
 use futures_util::{pin_mut, StreamExt};
-use leptos::{leptos_dom::logging::console_error, prelude::*};
 use leptos::task::spawn_local;
+use leptos::{leptos_dom::logging::console_error, prelude::*};
 use shared::{ChainConfig, ChainStatus};
 use std::rc::Rc;
 
@@ -63,14 +63,14 @@ pub fn App() -> impl IntoView {
 
             {move || {
                 show_modal.get().then(|| {
-                    let existing = chains.get().into_iter().map(|c| c.name.clone()).collect::<Vec<_>>();
+                    let existing = chains.get().clone();
                     let on_close = {
                         let set_show_modal = set_show_modal.clone();
                         Rc::new(move || set_show_modal.set(false))
                     };
                     let on_created: Rc<dyn Fn(u64)> = Rc::new(move |id| on_created(id));
                     let config = modal_config.get();
-                    view!{ <NewChainModal existing_names=existing on_close=on_close on_created=on_created /> }
+                    view!{ <NewChainModal config=config existing_chains=existing on_close=on_close on_created=on_created /> }
                 })
             }}
         </main>
@@ -118,16 +118,21 @@ fn TopBar(
 
 #[component]
 fn NewChainModal(
-    existing_names: Vec<String>,
+    config: Option<ChainConfig>,
+    existing_chains: Vec<ChainConfig>,
     on_close: Rc<dyn Fn()>,
     on_created: Rc<dyn Fn(u64)>,
 ) -> impl IntoView {
-    let (name, set_name) = create_signal(String::new());
-    let (chain_id, set_chain_id) = create_signal(String::from("31337"));
-    let (port, set_port) = create_signal(String::from("8545"));
-    let (block_time, set_block_time) = create_signal(String::from("1"));
-    let (error, set_error) = create_signal::<Option<String>>(None);
-    let (submitting, set_submitting) = create_signal(false);
+    let config = match config {
+        Some(c) => c,
+        None => ChainConfig::next(&existing_chains),
+    };
+    let (name, set_name) = signal(config.name.clone());
+    let (chain_id, set_chain_id) = signal(config.id.to_string());
+    let (port, set_port) = signal(config.port.to_string());
+    let (block_time, set_block_time) = signal(config.block_time.to_string());
+    let (error, set_error) = signal(None);
+    let (submitting, set_submitting) = signal(false);
 
     // clones for handlers to avoid moving the originals
     let on_close_submit = on_close.clone();
@@ -145,16 +150,31 @@ fn NewChainModal(
         {
             return Err("Name must be alphanumeric (dash/underscore allowed)".to_string());
         }
-        if existing_names.iter().any(|e| e.eq_ignore_ascii_case(&n)) {
+        if existing_chains
+            .iter()
+            .any(|e| e.name.eq_ignore_ascii_case(&n))
+        {
             return Err("Name must be unique".to_string());
         }
+
         let _cid: u64 = chain_id
             .get()
             .parse()
             .map_err(|_| "Invalid Chain ID".to_string())?;
+        if existing_chains.iter().any(|e| e.id == _cid) {
+            return Err("Chain ID must be unique".to_string());
+        }
+
         let _port: u16 = port.get().parse().map_err(|_| "Invalid Port".to_string())?;
-        // block_time is optional; treat empty or invalid as 0 during submission
-        let _bt: u64 = block_time.get().parse().unwrap_or(0);
+        if existing_chains.iter().any(|e| e.port == _port) {
+            return Err("Port must be unique".to_string());
+        }
+
+        // block_time must be grater greater than 0
+        let _bt: u64 = block_time.get().parse().unwrap_or(1);
+        if _bt == 0 {
+            return Err("Block time must be greater than 0".to_string());
+        }
         Ok(())
     };
 
@@ -231,7 +251,9 @@ fn ChainColumn(chain: ChainConfig, on_action: Rc<dyn Fn(&'static str)>) -> impl 
                             if let Some(msg) = msg.data().as_string() {
                                 set_logs.update(|v| v.push(msg));
                             } else {
-                                console_error(format!("Error reading SSE message: {:?}", msg).as_ref());
+                                console_error(
+                                    format!("Error reading SSE message: {:?}", msg).as_ref(),
+                                );
                             }
                         }
                     }
