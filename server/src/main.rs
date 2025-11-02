@@ -12,7 +12,7 @@ use axum::{
     Json, Router,
 };
 use futures::Stream;
-use shared::{ChainConfig, ChainStatus};
+use shared::types::chain_config::{ChainConfig, ChainStatus};
 use std::convert::Infallible;
 use std::pin::Pin;
 use tokio::sync::{broadcast, Mutex};
