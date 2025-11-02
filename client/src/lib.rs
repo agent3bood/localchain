@@ -2,7 +2,7 @@ use crate::api::client::Api;
 use futures_util::{pin_mut, StreamExt};
 use leptos::task::spawn_local;
 use leptos::{leptos_dom::logging::console_error, prelude::*};
-use shared::{ChainConfig, ChainStatus};
+use shared::types::chain_config::{ChainConfig, ChainStatus};
 use std::rc::Rc;
 
 mod api;
