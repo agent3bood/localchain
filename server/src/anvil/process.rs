@@ -1,3 +1,5 @@
+use alloy::providers::{Provider, ProviderBuilder, WsConnect};
+use shared::types::block::Block;
 use std::{process::Stdio, sync::Arc};
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
@@ -5,6 +7,7 @@ use tokio::{
     sync::broadcast,
     task::JoinHandle,
 };
+use tokio_stream::StreamExt;
 
 pub struct AnvilProcess {
     pub name: String,
@@ -14,6 +17,8 @@ pub struct AnvilProcess {
     child: Option<Child>,
     pub log_handles: Vec<JoinHandle<()>>,
     pub log_tx: Arc<broadcast::Sender<String>>,
+    pub block_tx: Arc<broadcast::Sender<Block>>,
+    pub block_handle: Option<JoinHandle<()>>,
 }
 
 impl AnvilProcess {
@@ -23,6 +28,7 @@ impl AnvilProcess {
         port: u16,
         block_time: u64,
         log_tx: Arc<broadcast::Sender<String>>,
+        block_tx: Arc<broadcast::Sender<Block>>,
     ) -> Self {
         Self {
             name,
@@ -32,6 +38,8 @@ impl AnvilProcess {
             child: None,
             log_handles: Vec::new(),
             log_tx,
+            block_tx,
+            block_handle: None,
         }
     }
 
@@ -76,6 +84,32 @@ impl AnvilProcess {
             });
             self.log_handles.push(handle);
         }
+
+        let port = self.port;
+        let block_tx = self.block_tx.clone();
+        let block_handle = tokio::spawn(async move {
+            if let Err(e) = async {
+                tokio::time::sleep(tokio::time::Duration::from_millis(5000)).await;
+                let ws = WsConnect::new(format!("ws://127.0.0.1:{}", port));
+                let provider = ProviderBuilder::new().connect_ws(ws).await?;
+                let mut stream = provider.subscribe_blocks().await?.into_stream();
+
+                while let Some(header) = stream.next().await {
+                    let _ = block_tx.send(Block {
+                        number: header.number,
+                        hash: header.hash.to_string(),
+                        time: header.timestamp,
+                    });
+                }
+                Ok::<(), anyhow::Error>(())
+            }
+            .await
+            {
+                println!("Block stream error: {:?}", e);
+            }
+        });
+        self.block_handle = Some(block_handle);
+
         self.child = Some(child);
         Ok(())
     }

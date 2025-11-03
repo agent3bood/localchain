@@ -1,9 +1,4 @@
-use std::{collections::HashMap, net::SocketAddr, path::PathBuf, sync::Arc};
-
 use crate::anvil::process::AnvilProcess;
-
-mod anvil;
-
 use axum::{
     extract::{Path, State},
     http::StatusCode,
@@ -12,12 +7,18 @@ use axum::{
     Json, Router,
 };
 use futures::Stream;
-use shared::types::chain_config::{ChainConfig, ChainStatus};
+use shared::types::{
+    block::Block,
+    chain_config::{ChainConfig, ChainStatus},
+};
 use std::convert::Infallible;
 use std::pin::Pin;
+use std::{collections::HashMap, net::SocketAddr, path::PathBuf, sync::Arc};
 use tokio::sync::{broadcast, Mutex};
 use tokio_stream::{wrappers::BroadcastStream, StreamExt};
 use tower_http::services::ServeDir;
+
+mod anvil;
 
 #[derive(Clone)]
 struct AppState {
@@ -29,6 +30,7 @@ struct ChainEntry {
     id: u64,
     config: ChainConfig,
     log_tx: Arc<broadcast::Sender<String>>,
+    block_tx: Arc<broadcast::Sender<Block>>,
     process: AnvilProcess,
 }
 
@@ -49,19 +51,23 @@ impl ChainsManager {
         if map.contains_key(&cfg.id) {
             return Err("name already exists".into());
         }
-        let (tx, _rx) = broadcast::channel(1024);
-        let log_tx = Arc::new(tx);
+        let (log_tx, _log_rx) = broadcast::channel(1024);
+        let (block_tx, _block_rx) = broadcast::channel(1024);
+        let log_tx = Arc::new(log_tx);
+        let block_tx = Arc::new(block_tx);
         let process = AnvilProcess::new(
             cfg.name.clone(),
             cfg.id,
             cfg.port,
             cfg.block_time,
             log_tx.clone(),
+            block_tx.clone(),
         );
         let entry = ChainEntry {
             id: cfg.id,
             config: cfg,
             log_tx: log_tx,
+            block_tx: block_tx,
             process: process,
         };
         let id = entry.id.clone();
@@ -129,6 +135,14 @@ impl ChainsManager {
         };
         Ok(entry.log_tx.subscribe())
     }
+
+    async fn subscribe_blocks(&self, id: &u64) -> Result<broadcast::Receiver<Block>, String> {
+        let map = self.inner.lock().await;
+        let Some(entry) = map.get(id) else {
+            return Err("not found".into());
+        };
+        Ok(entry.block_tx.subscribe())
+    }
 }
 
 #[tokio::main]
@@ -159,6 +173,7 @@ async fn main() {
         .route("/api/chains/:id/restart", post(restart_chain))
         .route("/api/chains/:id/delete", post(delete_chain))
         .route("/api/chains/:id/logstream", get(log_stream))
+        .route("/api/chains/:id/blockstream", get(block_stream))
         // index route serves the built client index.html
         .route("/", get(index))
         // serve other client assets under /
@@ -241,6 +256,26 @@ async fn log_stream(
             Ok(rx) => {
                 let s = BroadcastStream::new(rx).map(|msg| match msg {
                     Ok(line) => Ok(sse::Event::default().data(line)),
+                    Err(_) => Ok(sse::Event::default().event("ping").data("")),
+                });
+                Box::pin(s)
+            }
+            Err(_) => Box::pin(tokio_stream::once(Ok(sse::Event::default()
+                .event("error")
+                .data("not found")))),
+        };
+    Sse::new(stream).keep_alive(sse::KeepAlive::new())
+}
+
+async fn block_stream(
+    State(state): State<AppState>,
+    Path(id): Path<u64>,
+) -> Sse<impl Stream<Item = Result<sse::Event, Infallible>>> {
+    let stream: Pin<Box<dyn Stream<Item = Result<sse::Event, Infallible>> + Send>> =
+        match state.manager.subscribe_blocks(&id).await {
+            Ok(rx) => {
+                let s = BroadcastStream::new(rx).map(|msg| match msg {
+                    Ok(block) => Ok(sse::Event::default().data(block.to_json())),
                     Err(_) => Ok(sse::Event::default().event("ping").data("")),
                 });
                 Box::pin(s)
