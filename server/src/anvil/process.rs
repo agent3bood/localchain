@@ -1,6 +1,7 @@
 use alloy::providers::{Provider, ProviderBuilder, WsConnect};
 use shared::types::block::Block;
-use std::{process::Stdio, sync::Arc};
+use std::{process::Stdio, sync::Arc, time::Duration};
+use tokio::net::TcpStream;
 use tokio::{
     io::{AsyncBufReadExt, BufReader},
     process::{Child, Command},
@@ -89,7 +90,33 @@ impl AnvilProcess {
         let block_tx = self.block_tx.clone();
         let block_handle = tokio::spawn(async move {
             if let Err(e) = async {
-                tokio::time::sleep(tokio::time::Duration::from_millis(5000)).await;
+                let mut attempt = 0;
+                let max_attempts = 50;
+                loop {
+                    match tokio::time::timeout(
+                        Duration::from_millis(100),
+                        TcpStream::connect(format!("127.0.0.1:{}", port)),
+                    )
+                    .await
+                    {
+                        Ok(Ok(_)) => break,
+                        Ok(Err(_)) => {
+                            attempt += 1;
+                            if attempt >= max_attempts {
+                                return Err(anyhow::anyhow!("Failed to connect to websocket"));
+                            }
+                            tokio::time::sleep(Duration::from_millis(100)).await;
+                        }
+                        Err(_) => {
+                            attempt += 1;
+                            if attempt >= max_attempts {
+                                return Err(anyhow::anyhow!("Failed to connect to websocket"));
+                            }
+                            tokio::time::sleep(Duration::from_millis(100)).await;
+                        }
+                    };
+                }
+
                 let ws = WsConnect::new(format!("ws://127.0.0.1:{}", port));
                 let provider = ProviderBuilder::new().connect_ws(ws).await?;
                 let mut stream = provider.subscribe_blocks().await?.into_stream();
