@@ -1,7 +1,9 @@
 use crate::api::client::Api;
 use futures_util::{pin_mut, StreamExt};
+use leptos::leptos_dom::logging::console_log;
 use leptos::task::spawn_local;
 use leptos::{leptos_dom::logging::console_error, prelude::*};
+use shared::types::block::Block;
 use shared::types::chain_config::{ChainConfig, ChainStatus};
 use std::rc::Rc;
 
@@ -231,8 +233,16 @@ fn NewChainModal(
 
 #[component]
 fn ChainColumn(chain: ChainConfig, on_action: Rc<dyn Fn(&'static str)>) -> impl IntoView {
-    let (show_info, set_show_info) = create_signal(false);
-    let (logs, set_logs) = create_signal(Vec::<String>::new());
+    let (show_info, set_show_info) = signal(false);
+    let (logs, set_logs) = signal(Vec::<String>::new());
+    let (blocks, set_blocks) = signal(Vec::<Block>::new());
+
+    #[derive(Clone)]
+    enum Tabs {
+        Logs,
+        Blocks,
+    }
+    let (active_tab, set_active_tab) = signal(Tabs::Logs);
 
     let id = chain.id;
 
@@ -241,11 +251,8 @@ fn ChainColumn(chain: ChainConfig, on_action: Rc<dyn Fn(&'static str)>) -> impl 
             spawn_local(async move {
                 match Api::instance().log_stream(id) {
                     Ok(mut es) => {
-                        let mut stdout = es.subscribe("message").unwrap();
-                        let stderr = es.subscribe("error").unwrap();
-
+                        let stdout = es.subscribe("message").unwrap();
                         pin_mut!(stdout);
-                        pin_mut!(stderr);
 
                         while let Some(Ok((_event_type, msg))) = stdout.next().await {
                             if let Some(msg) = msg.data().as_string() {
@@ -265,6 +272,38 @@ fn ChainColumn(chain: ChainConfig, on_action: Rc<dyn Fn(&'static str)>) -> impl 
         }
     });
 
+    Effect::new({
+        move |_| {
+            spawn_local(async move {
+                match Api::instance().block_stream(id) {
+                    Ok(mut es) => {
+                        let events = es.subscribe("message").unwrap();
+                        pin_mut!(events);
+
+                        while let Some(Ok((_event_type, msg))) = events.next().await {
+                            if let Some(msg) = msg.data().as_string() {
+                                if let Ok(block) = Block::from_json(&msg) {
+                                    set_blocks.update(|v| v.push(block));
+                                } else {
+                                    console_error(
+                                        format!("Error parsing block: {:?}", msg).as_ref(),
+                                    );
+                                }
+                            } else {
+                                console_error(
+                                    format!("Error reading SSE message: {:?}", msg).as_ref(),
+                                );
+                            }
+                        }
+                    }
+                    Err(e) => {
+                        console_error(format!("Error reading SSE message: {:?}", e).as_ref());
+                    }
+                }
+            })
+        }
+    });
+
     let status_text = match chain.status {
         ChainStatus::Stopped => "🔴 Stopped",
         ChainStatus::Running => "🟢 Running",
@@ -280,6 +319,10 @@ fn ChainColumn(chain: ChainConfig, on_action: Rc<dyn Fn(&'static str)>) -> impl 
         <div style="min-width:380px; border:1px solid #e5e7eb; border-radius:8px; overflow:hidden; display:flex; flex-direction:column;">
             <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 10px; background:#f9fafb; border-bottom:1px solid #e5e7eb;">
                 <div style="font-weight:600;">{chain.name.clone()}</div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        {let action = set_active_tab.clone(); view!{ <button on:click=move |_| action.set(Tabs::Logs) style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;">{"Logs"}</button> } }
+                        {let action = set_active_tab.clone(); view!{ <button on:click=move |_| action.set(Tabs::Blocks) style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;">{"Blocks"}</button> } }
+                  </div>
                 <div style="display:flex; align-items:center; gap:8px;">
                     <span style="font-size:12px; padding:2px 6px; border:1px solid #e5e7eb; border-radius:9999px; background:white;">{status_text}</span>
                     { let on_action = on_action.clone(); view!{ <button disabled=move || !can_start on:click=move |_| on_action("start") style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;">{"Start"}</button> } }
@@ -295,11 +338,28 @@ fn ChainColumn(chain: ChainConfig, on_action: Rc<dyn Fn(&'static str)>) -> impl 
                     {format!("Chain ID: {}  •  Port: {}  •  Block Time: {}", chain.id, chain.port, chain.block_time)}
                 </div> }
             })}
-            <div style="flex:1; background:#0b1020; color:#e5e7eb; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; font-size:12px; padding:8px; white-space:pre-wrap; overflow:auto;">
-                <For each=move || logs.get() key=|line| line.clone() children=move |line: String| {
-                    view!{ <div>{line}</div> }
-                } />
-            </div>
+            { move || {
+                match active_tab.get() {
+                    Tabs::Logs => {
+                       view!{
+                        <div style="flex:1; background:#0b1020; color:#e5e7eb; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; font-size:12px; padding:8px; white-space:pre-wrap; overflow:auto;">
+                        <For each=move || logs.get() key=|line| line.clone() children=move |line: String| {
+                            view!{ <div>{line}</div> }
+                        } />
+                    </div>
+                       }.into_any()
+                    },
+                    Tabs::Blocks => {
+                        view!{
+                            <div style="flex:1; background:#0b1020; color:#e5e7eb; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; font-size:12px; padding:8px; white-space:pre-wrap; overflow:auto;">
+                            <For each=move || blocks.get() key=|block| block.number children=move |block: Block| {
+                                view!{ <div>{block.number}</div> }
+                            } />
+                        </div>
+                        }.into_any()
+                    },
+                }
+            }            }
         </div>
     }
 }

@@ -58,4 +58,9 @@ impl Api {
         let url = format!("/api/chains/{}/logstream", id);
         EventSource::new(&url).map_err(|e| format!("{e:?}"))
     }
+
+    pub fn block_stream(&self, id: u64) -> Result<EventSource, String> {
+        let url = format!("/api/chains/{}/blockstream", id);
+        EventSource::new(&url).map_err(|e| format!("{e:?}"))
+    }
 }
