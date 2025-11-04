@@ -58,5 +58,16 @@ cd client && trunk serve --port 8080
 cargo run -p server
 ```
 
+### Code formating
+
+```bash
+cargo install leptosfmt
+```
+
+In client directory
+```bash
+leptosfmt ./**/*.rs
+```
+
 TODO: 
 - Configure server base url for client; this is needed to enable dev mode
