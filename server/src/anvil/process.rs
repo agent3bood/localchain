@@ -1,3 +1,4 @@
+use alloy::eips::BlockNumberOrTag;
 use alloy::providers::{Provider, ProviderBuilder, WsConnect};
 use shared::types::block::Block;
 use std::{process::Stdio, sync::Arc, time::Duration};
@@ -122,11 +123,17 @@ impl AnvilProcess {
                 let mut stream = provider.subscribe_blocks().await?.into_stream();
 
                 while let Some(header) = stream.next().await {
-                    let _ = block_tx.send(Block {
-                        number: header.number,
-                        hash: header.hash.to_string(),
-                        time: header.timestamp,
-                    });
+                    let block_num = BlockNumberOrTag::Number(header.number);
+                    if let Ok(Some(block)) = provider.get_block_by_number(block_num).await {
+                        let _ = block_tx.send(Block {
+                            number: header.number,
+                            hash: header.hash.to_string(),
+                            time: header.timestamp,
+                            transactions: block.transactions.len() as u64,
+                        });
+                    } else {
+                        println!("Error getting Block {}", header.number);
+                    }
                 }
                 Ok::<(), anyhow::Error>(())
             }

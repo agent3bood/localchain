@@ -5,6 +5,7 @@ pub struct Block {
     pub number: u64,
     pub hash: String,
     pub time: u64,
+    pub transactions: u64,
 }
 
 impl Block {

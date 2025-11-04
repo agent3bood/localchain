@@ -1,6 +1,6 @@
 use crate::api::client::Api;
+use crate::ui::blocks_column::BlocksColumn;
 use futures_util::{pin_mut, StreamExt};
-use leptos::leptos_dom::logging::console_log;
 use leptos::task::spawn_local;
 use leptos::{leptos_dom::logging::console_error, prelude::*};
 use shared::types::block::Block;
@@ -8,6 +8,7 @@ use shared::types::chain_config::{ChainConfig, ChainStatus};
 use std::rc::Rc;
 
 mod api;
+mod ui;
 
 #[component]
 pub fn App() -> impl IntoView {
@@ -541,20 +542,7 @@ fn ChainColumn(chain: ChainConfig, on_action: Rc<dyn Fn(&'static str)>) -> impl 
                         }
                             .into_any()
                     }
-                    Tabs::Blocks => {
-                        view! {
-                            <div style="flex:1; background:#0b1020; color:#e5e7eb; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; font-size:12px; padding:8px; white-space:pre-wrap; overflow:auto;">
-                                <For
-                                    each=move || blocks.get()
-                                    key=|block| block.number
-                                    children=move |block: Block| {
-                                        view! { <div>{block.number}</div> }
-                                    }
-                                />
-                            </div>
-                        }
-                            .into_any()
-                    }
+                    Tabs::Blocks => view! { <BlocksColumn blocks=blocks /> }.into_any(),
                 }
             }}
         </div>
