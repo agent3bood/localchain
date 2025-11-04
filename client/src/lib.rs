@@ -53,27 +53,59 @@ pub fn App() -> impl IntoView {
     view! {
         <main style="font-family: system-ui, -apple-system, Segoe UI, Roboto, Ubuntu, Cantarell, Noto Sans, Helvetica, Arial, Apple Color Emoji, Segoe UI Emoji;">
             <TopBar set_show_modal=set_show_modal set_modal_config=set_modal_config />
-            {move || error_msg.get().map(|e| view!{ <div style="margin:8px; padding:8px; color:#842029; background:#f8d7da; border:1px solid #f5c2c7; border-radius:6px;">{e}</div> })}
-            {move || if loading.get() { Some(view!{ <div style="margin:8px;">{"Loading..."}</div> }) } else { None }}
+            {move || {
+                error_msg
+                    .get()
+                    .map(|e| {
+                        view! {
+                            <div style="margin:8px; padding:8px; color:#842029; background:#f8d7da; border:1px solid #f5c2c7; border-radius:6px;">
+                                {e}
+                            </div>
+                        }
+                    })
+            }}
+            {move || {
+                if loading.get() {
+                    Some(view! { <div style="margin:8px;">{"Loading..."}</div> })
+                } else {
+                    None
+                }
+            }}
             <div style="display:flex; gap:16px; overflow-x:auto; padding:16px;">
-                <For each=move || chains.get() key=|c| c.name.clone() children=move |c: ChainConfig| {
-                    let id = c.id;
-                    let cb: Rc<dyn Fn(&'static str)> = Rc::new(move |action| on_action(id, action));
-                    view!{ <ChainColumn chain=c on_action=cb.clone() /> }
-                } />
+                <For
+                    each=move || chains.get()
+                    key=|c| c.name.clone()
+                    children=move |c: ChainConfig| {
+                        let id = c.id;
+                        let cb: Rc<dyn Fn(&'static str)> = Rc::new(move |action| on_action(
+                            id,
+                            action,
+                        ));
+                        view! { <ChainColumn chain=c on_action=cb.clone() /> }
+                    }
+                />
             </div>
 
             {move || {
-                show_modal.get().then(|| {
-                    let existing = chains.get().clone();
-                    let on_close = {
-                        let set_show_modal = set_show_modal.clone();
-                        Rc::new(move || set_show_modal.set(false))
-                    };
-                    let on_created: Rc<dyn Fn(u64)> = Rc::new(move |id| on_created(id));
-                    let config = modal_config.get();
-                    view!{ <NewChainModal config=config existing_chains=existing on_close=on_close on_created=on_created /> }
-                })
+                show_modal
+                    .get()
+                    .then(|| {
+                        let existing = chains.get().clone();
+                        let on_close = {
+                            let set_show_modal = set_show_modal.clone();
+                            Rc::new(move || set_show_modal.set(false))
+                        };
+                        let on_created: Rc<dyn Fn(u64)> = Rc::new(move |id| on_created(id));
+                        let config = modal_config.get();
+                        view! {
+                            <NewChainModal
+                                config=config
+                                existing_chains=existing
+                                on_close=on_close
+                                on_created=on_created
+                            />
+                        }
+                    })
             }}
         </main>
     }
@@ -83,7 +115,7 @@ pub fn App() -> impl IntoView {
 pub fn main() {
     Api::init("".to_string());
     console_error_panic_hook::set_once();
-    leptos::mount::mount_to_body(|| view! { <App/> });
+    leptos::mount::mount_to_body(|| view! { <App /> });
 }
 
 // --- UI Components ---
@@ -97,22 +129,37 @@ fn TopBar(
         <div style="display:flex; align-items:center; justify-content:space-between; padding:12px 16px; border-bottom:1px solid #e5e7eb; position:sticky; top:0; background:#fff; z-index:10;">
             <div style="font-weight:600; font-size:18px;">{"Local Chain"}</div>
             <div style="display:flex; gap:8px;">
-                <button on:click=move |_| {
-                    set_modal_config.set(Some(ChainConfig {
-                        name: "Ethereum".to_string(),
-                        id: 1,
-                        port: 8545,
-                        block_time: 1,
-                        status: ChainStatus::Stopped,
-                    }));
-                    set_show_modal.set(true);
-                } style="background:none; border:none; padding:8px; border-radius:6px; cursor:pointer;">
-                    <img src="/assets/ethereum_logo.svg" alt="New Ethereum Chain" style="width:32px; height:32px;" />
+                <button
+                    on:click=move |_| {
+                        set_modal_config
+                            .set(
+                                Some(ChainConfig {
+                                    name: "Ethereum".to_string(),
+                                    id: 1,
+                                    port: 8545,
+                                    block_time: 1,
+                                    status: ChainStatus::Stopped,
+                                }),
+                            );
+                        set_show_modal.set(true);
+                    }
+                    style="background:none; border:none; padding:8px; border-radius:6px; cursor:pointer;"
+                >
+                    <img
+                        src="/assets/ethereum_logo.svg"
+                        alt="New Ethereum Chain"
+                        style="width:32px; height:32px;"
+                    />
                 </button>
-                <button on:click=move |_| {
-                    set_modal_config.set(None);
-                    set_show_modal.set(true);
-                } style="background:#2563eb; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer;">{"New Chain"}</button>
+                <button
+                    on:click=move |_| {
+                        set_modal_config.set(None);
+                        set_show_modal.set(true);
+                    }
+                    style="background:#2563eb; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer;"
+                >
+                    {"New Chain"}
+                </button>
             </div>
         </div>
     }
@@ -212,19 +259,73 @@ fn NewChainModal(
         <div style="position:fixed; inset:0; background:rgba(0,0,0,0.4); display:flex; align-items:center; justify-content:center;">
             <div style="background:white; padding:16px; width:420px; border-radius:8px; box-shadow:0 10px 25px rgba(0,0,0,0.2);">
                 <div style="font-weight:600; font-size:16px; margin-bottom:12px;">New Chain</div>
-                {move || error.get().map(|e| view!{ <div style="margin-bottom:8px; padding:8px; color:#842029; background:#f8d7da; border:1px solid #f5c2c7; border-radius:6px;">{e}</div> })}
+                {move || {
+                    error
+                        .get()
+                        .map(|e| {
+                            view! {
+                                <div style="margin-bottom:8px; padding:8px; color:#842029; background:#f8d7da; border:1px solid #f5c2c7; border-radius:6px;">
+                                    {e}
+                                </div>
+                            }
+                        })
+                }}
                 <div style="display:flex; flex-direction:column; gap:8px;">
-                    <label>Name<input prop:value=move || name.get() on:input=move |ev| set_name.set(event_target_value(&ev)) style="width:100%; padding:6px; border:1px solid #e5e7eb; border-radius:6px;" /></label>
-                    <label>Chain ID<input prop:value=move || chain_id.get() on:input=move |ev| set_chain_id.set(event_target_value(&ev)) inputmode="numeric" style="width:100%; padding:6px; border:1px solid #e5e7eb; border-radius:6px;" /></label>
-                    <label>Port<input prop:value=move || port.get() on:input=move |ev| set_port.set(event_target_value(&ev)) inputmode="numeric" style="width:100%; padding:6px; border:1px solid #e5e7eb; border-radius:6px;" /></label>
-                    <label>Block Time (s)<input prop:value=move || block_time.get() on:input=move |ev| set_block_time.set(event_target_value(&ev)) inputmode="numeric" style="width:100%; padding:6px; border:1px solid #e5e7eb; border-radius:6px;" /></label>
+                    <label>
+                        Name
+                        <input
+                            prop:value=move || name.get()
+                            on:input=move |ev| set_name.set(event_target_value(&ev))
+                            style="width:100%; padding:6px; border:1px solid #e5e7eb; border-radius:6px;"
+                        />
+                    </label>
+                    <label>
+                        Chain ID
+                        <input
+                            prop:value=move || chain_id.get()
+                            on:input=move |ev| set_chain_id.set(event_target_value(&ev))
+                            inputmode="numeric"
+                            style="width:100%; padding:6px; border:1px solid #e5e7eb; border-radius:6px;"
+                        />
+                    </label>
+                    <label>
+                        Port
+                        <input
+                            prop:value=move || port.get()
+                            on:input=move |ev| set_port.set(event_target_value(&ev))
+                            inputmode="numeric"
+                            style="width:100%; padding:6px; border:1px solid #e5e7eb; border-radius:6px;"
+                        />
+                    </label>
+                    <label>
+                        Block Time (s)
+                        <input
+                            prop:value=move || block_time.get()
+                            on:input=move |ev| set_block_time.set(event_target_value(&ev))
+                            inputmode="numeric"
+                            style="width:100%; padding:6px; border:1px solid #e5e7eb; border-radius:6px;"
+                        />
+                    </label>
                 </div>
                 <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:12px;">
                     {
                         let on_close_cancel = on_close_cancel.clone();
-                        view!{ <button on:click=move |_| on_close_cancel.as_ref()() style="background:white; border:1px solid #d1d5db; padding:8px 12px; border-radius:6px; cursor:pointer;">{"Cancel"}</button> }
+                        view! {
+                            <button
+                                on:click=move |_| on_close_cancel.as_ref()()
+                                style="background:white; border:1px solid #d1d5db; padding:8px 12px; border-radius:6px; cursor:pointer;"
+                            >
+                                {"Cancel"}
+                            </button>
+                        }
                     }
-                    <button disabled=move || submitting.get() on:click=submit style="background:#2563eb; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer;">{move || if submitting.get() { "Starting..." } else { "Start" }}</button>
+                    <button
+                        disabled=move || submitting.get()
+                        on:click=submit
+                        style="background:#2563eb; color:white; border:none; padding:8px 12px; border-radius:6px; cursor:pointer;"
+                    >
+                        {move || if submitting.get() { "Starting..." } else { "Start" }}
+                    </button>
                 </div>
             </div>
         </div>
@@ -319,47 +420,143 @@ fn ChainColumn(chain: ChainConfig, on_action: Rc<dyn Fn(&'static str)>) -> impl 
         <div style="min-width:380px; border:1px solid #e5e7eb; border-radius:8px; overflow:hidden; display:flex; flex-direction:column;">
             <div style="display:flex; align-items:center; justify-content:space-between; padding:8px 10px; background:#f9fafb; border-bottom:1px solid #e5e7eb;">
                 <div style="font-weight:600;">{chain.name.clone()}</div>
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        {let action = set_active_tab.clone(); view!{ <button on:click=move |_| action.set(Tabs::Logs) style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;">{"Logs"}</button> } }
-                        {let action = set_active_tab.clone(); view!{ <button on:click=move |_| action.set(Tabs::Blocks) style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;">{"Blocks"}</button> } }
-                  </div>
                 <div style="display:flex; align-items:center; gap:8px;">
-                    <span style="font-size:12px; padding:2px 6px; border:1px solid #e5e7eb; border-radius:9999px; background:white;">{status_text}</span>
-                    { let on_action = on_action.clone(); view!{ <button disabled=move || !can_start on:click=move |_| on_action("start") style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;">{"Start"}</button> } }
-                    { let on_action = on_action.clone(); view!{ <button disabled=move || !can_stop on:click=move |_| on_action("stop") style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;">{"Stop"}</button> } }
-                    { let on_action = on_action.clone(); view!{ <button disabled=move || !can_restart on:click=move |_| on_action("restart") style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;">{"Restart"}</button> } }
-                    { let on_action = on_action.clone(); view! { <button on:click=move |_| on_action("delete") style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;">{"Delete"}</button> } }
-                    <button on:click=move |_| set_show_info.update(|v| *v = !*v) style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;">{"Info"}</button>
-                    <button on:click=move |_| set_logs.set(vec![]) style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;">{"Clear Log"}</button>
+                    {
+                        let action = set_active_tab.clone();
+                        view! {
+                            <button
+                                on:click=move |_| action.set(Tabs::Logs)
+                                style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;"
+                            >
+                                {"Logs"}
+                            </button>
+                        }
+                    }
+                    {
+                        let action = set_active_tab.clone();
+                        view! {
+                            <button
+                                on:click=move |_| action.set(Tabs::Blocks)
+                                style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;"
+                            >
+                                {"Blocks"}
+                            </button>
+                        }
+                    }
+                </div>
+                <div style="display:flex; align-items:center; gap:8px;">
+                    <span style="font-size:12px; padding:2px 6px; border:1px solid #e5e7eb; border-radius:9999px; background:white;">
+                        {status_text}
+                    </span>
+                    {
+                        let on_action = on_action.clone();
+                        view! {
+                            <button
+                                disabled=move || !can_start
+                                on:click=move |_| on_action("start")
+                                style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;"
+                            >
+                                {"Start"}
+                            </button>
+                        }
+                    }
+                    {
+                        let on_action = on_action.clone();
+                        view! {
+                            <button
+                                disabled=move || !can_stop
+                                on:click=move |_| on_action("stop")
+                                style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;"
+                            >
+                                {"Stop"}
+                            </button>
+                        }
+                    }
+                    {
+                        let on_action = on_action.clone();
+                        view! {
+                            <button
+                                disabled=move || !can_restart
+                                on:click=move |_| on_action("restart")
+                                style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;"
+                            >
+                                {"Restart"}
+                            </button>
+                        }
+                    }
+                    {
+                        let on_action = on_action.clone();
+                        view! {
+                            <button
+                                on:click=move |_| on_action("delete")
+                                style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;"
+                            >
+                                {"Delete"}
+                            </button>
+                        }
+                    }
+                    <button
+                        on:click=move |_| set_show_info.update(|v| *v = !*v)
+                        style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;"
+                    >
+                        {"Info"}
+                    </button>
+                    <button
+                        on:click=move |_| set_logs.set(vec![])
+                        style="padding:6px 8px; border:1px solid #d1d5db; background:white; border-radius:6px; cursor:pointer;"
+                    >
+                        {"Clear Log"}
+                    </button>
                 </div>
             </div>
-            {move || show_info.get().then(|| {
-                view!{ <div style="padding:8px 10px; border-bottom:1px solid #e5e7eb; font-size:12px; color:#374151;">
-                    {format!("Chain ID: {}  •  Port: {}  •  Block Time: {}", chain.id, chain.port, chain.block_time)}
-                </div> }
-            })}
-            { move || {
+            {move || {
+                show_info
+                    .get()
+                    .then(|| {
+                        view! {
+                            <div style="padding:8px 10px; border-bottom:1px solid #e5e7eb; font-size:12px; color:#374151;">
+                                {format!(
+                                    "Chain ID: {}  •  Port: {}  •  Block Time: {}",
+                                    chain.id,
+                                    chain.port,
+                                    chain.block_time,
+                                )}
+                            </div>
+                        }
+                    })
+            }}
+            {move || {
                 match active_tab.get() {
                     Tabs::Logs => {
-                       view!{
-                        <div style="flex:1; background:#0b1020; color:#e5e7eb; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; font-size:12px; padding:8px; white-space:pre-wrap; overflow:auto;">
-                        <For each=move || logs.get() key=|line| line.clone() children=move |line: String| {
-                            view!{ <div>{line}</div> }
-                        } />
-                    </div>
-                       }.into_any()
-                    },
-                    Tabs::Blocks => {
-                        view!{
+                        view! {
                             <div style="flex:1; background:#0b1020; color:#e5e7eb; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; font-size:12px; padding:8px; white-space:pre-wrap; overflow:auto;">
-                            <For each=move || blocks.get() key=|block| block.number children=move |block: Block| {
-                                view!{ <div>{block.number}</div> }
-                            } />
-                        </div>
-                        }.into_any()
-                    },
+                                <For
+                                    each=move || logs.get()
+                                    key=|line| line.clone()
+                                    children=move |line: String| {
+                                        view! { <div>{line}</div> }
+                                    }
+                                />
+                            </div>
+                        }
+                            .into_any()
+                    }
+                    Tabs::Blocks => {
+                        view! {
+                            <div style="flex:1; background:#0b1020; color:#e5e7eb; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; font-size:12px; padding:8px; white-space:pre-wrap; overflow:auto;">
+                                <For
+                                    each=move || blocks.get()
+                                    key=|block| block.number
+                                    children=move |block: Block| {
+                                        view! { <div>{block.number}</div> }
+                                    }
+                                />
+                            </div>
+                        }
+                            .into_any()
+                    }
                 }
-            }            }
+            }}
         </div>
     }
 }
