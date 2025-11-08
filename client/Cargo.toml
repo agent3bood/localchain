@@ -9,6 +9,7 @@ crate-type = ["cdylib"]
 [dependencies]
 shared = { path = "../shared" }
 leptos = { version = "0.8", features = ["csr"] }
+leptos_router = { version = "0.8" }
 leptos-use = { version = "0.16", features = ["use_event_source"] }
 wasm-bindgen = "0.2"
 console_error_panic_hook = "0.1"

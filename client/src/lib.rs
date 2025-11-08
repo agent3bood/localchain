@@ -1,9 +1,11 @@
 use crate::api::client::Api;
+use crate::ui::block_page::BlockPage;
 use crate::ui::blocks_column::BlocksColumn;
 use crate::ui::logs_column::LogsColumn;
 use futures_util::{pin_mut, StreamExt};
 use leptos::task::spawn_local;
 use leptos::{leptos_dom::logging::console_error, prelude::*};
+use leptos_router::{components::*, hooks::*, path};
 use shared::types::block::Block;
 use shared::types::chain_config::{ChainConfig, ChainStatus};
 use std::rc::Rc;
@@ -12,12 +14,12 @@ mod api;
 mod ui;
 
 #[component]
-pub fn App() -> impl IntoView {
-    let (show_modal, set_show_modal) = create_signal(false);
-    let (modal_config, set_modal_config) = create_signal::<Option<ChainConfig>>(None);
-    let (chains, set_chains) = create_signal::<Vec<ChainConfig>>(vec![]);
-    let (loading, set_loading) = create_signal(false);
-    let (error_msg, set_error_msg) = create_signal::<Option<String>>(None);
+pub fn HomePage() -> impl IntoView {
+    let (show_modal, set_show_modal) = signal(false);
+    let (modal_config, set_modal_config) = signal::<Option<ChainConfig>>(None);
+    let (chains, set_chains) = signal::<Vec<ChainConfig>>(vec![]);
+    let (loading, set_loading) = signal(false);
+    let (error_msg, set_error_msg) = signal::<Option<String>>(None);
 
     let refresh = move || {
         set_loading.set(true);
@@ -117,7 +119,19 @@ pub fn App() -> impl IntoView {
 pub fn main() {
     Api::init("".to_string());
     console_error_panic_hook::set_once();
-    leptos::mount::mount_to_body(|| view! { <App /> });
+    leptos::mount::mount_to_body(|| {
+        view! {
+            <Router>
+                <Routes fallback=|| view! { <div>"Not found"</div> }>
+                    <Route path=path!("") view=move || view! { <HomePage /> } />
+                    <Route
+                        path=path!(":chainid/:blocknumber")
+                        view=move || view! { <BlockPage /> }
+                    />
+                </Routes>
+            </Router>
+        }
+    });
 }
 
 // --- UI Components ---
@@ -530,7 +544,9 @@ fn ChainColumn(chain: ChainConfig, on_action: Rc<dyn Fn(&'static str)>) -> impl 
             {move || {
                 match active_tab.get() {
                     Tabs::Logs => view! { <LogsColumn logs=logs /> }.into_any(),
-                    Tabs::Blocks => view! { <BlocksColumn blocks=blocks /> }.into_any(),
+                    Tabs::Blocks => {
+                        view! { <BlocksColumn blocks=blocks chainid=chain.id /> }.into_any()
+                    }
                 }
             }}
         </div>
