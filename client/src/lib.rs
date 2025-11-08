@@ -1,5 +1,6 @@
 use crate::api::client::Api;
 use crate::ui::blocks_column::BlocksColumn;
+use crate::ui::logs_column::LogsColumn;
 use futures_util::{pin_mut, StreamExt};
 use leptos::task::spawn_local;
 use leptos::{leptos_dom::logging::console_error, prelude::*};
@@ -528,20 +529,7 @@ fn ChainColumn(chain: ChainConfig, on_action: Rc<dyn Fn(&'static str)>) -> impl 
             }}
             {move || {
                 match active_tab.get() {
-                    Tabs::Logs => {
-                        view! {
-                            <div style="flex:1; background:#0b1020; color:#e5e7eb; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; font-size:12px; padding:8px; white-space:pre-wrap; overflow:auto;">
-                                <For
-                                    each=move || logs.get()
-                                    key=|line| line.clone()
-                                    children=move |line: String| {
-                                        view! { <div>{line}</div> }
-                                    }
-                                />
-                            </div>
-                        }
-                            .into_any()
-                    }
+                    Tabs::Logs => view! { <LogsColumn logs=logs /> }.into_any(),
                     Tabs::Blocks => view! { <BlocksColumn blocks=blocks /> }.into_any(),
                 }
             }}

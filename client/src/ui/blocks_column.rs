@@ -19,12 +19,11 @@ fn truncate_hash(hash: &str, len: usize) -> String {
     if hash.len() <= len {
         hash.to_string()
     } else {
-        format!("{}...{}", &hash[..len/2], &hash[hash.len()-len/2..])
+        format!("{}...{}", &hash[..len / 2], &hash[hash.len() - len / 2..])
     }
 }
 
 #[component]
-#[allow(non_snake_case)]
 pub fn BlocksColumn(blocks: ReadSignal<Vec<Block>>) -> impl IntoView {
     view! {
         <div style="flex:1; background:#0b1020; color:#e5e7eb; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, Liberation Mono, monospace; font-size:12px; padding:8px; overflow:auto;">
