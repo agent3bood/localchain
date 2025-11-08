@@ -1,6 +1,7 @@
 use alloy::eips::BlockNumberOrTag;
 use alloy::providers::{Provider, ProviderBuilder, WsConnect};
 use shared::types::block::Block;
+use shared::types::transaction::Transaction;
 use std::{process::Stdio, sync::Arc, time::Duration};
 use tokio::net::TcpStream;
 use tokio::{
@@ -21,6 +22,7 @@ pub struct AnvilProcess {
     pub log_tx: Arc<broadcast::Sender<String>>,
     pub block_tx: Arc<broadcast::Sender<Block>>,
     pub block_handle: Option<JoinHandle<()>>,
+    provider_ws: Option<Arc<dyn Provider>>,
 }
 
 impl AnvilProcess {
@@ -42,6 +44,7 @@ impl AnvilProcess {
             log_tx,
             block_tx,
             block_handle: None,
+            provider_ws: None,
         }
     }
 
@@ -87,48 +90,60 @@ impl AnvilProcess {
             self.log_handles.push(handle);
         }
 
-        let port = self.port;
+        let provider_ws = {
+            let port = self.port;
+            let mut attempt = 0;
+            let max_attempts = 50;
+            loop {
+                match tokio::time::timeout(
+                    Duration::from_millis(100),
+                    TcpStream::connect(format!("127.0.0.1:{}", port)),
+                )
+                .await
+                {
+                    Ok(Ok(_)) => break,
+                    Ok(Err(_)) => {
+                        attempt += 1;
+                        if attempt >= max_attempts {
+                            return Err("Failed to connect to websocket".into());
+                        }
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
+                    Err(_) => {
+                        attempt += 1;
+                        if attempt >= max_attempts {
+                            return Err("Failed to connect to websocket".into());
+                        }
+                        tokio::time::sleep(Duration::from_millis(100)).await;
+                    }
+                };
+            }
+            let ws = WsConnect::new(format!("ws://127.0.0.1:{}", port));
+            let provider = ProviderBuilder::new()
+                .connect_ws(ws)
+                .await
+                .map_err(|e| e.to_string())?;
+            provider
+        };
+        self.provider_ws = Some(Arc::new(provider_ws));
+
         let block_tx = self.block_tx.clone();
+        let provider_ws = self.provider_ws.clone().unwrap();
         let block_handle = tokio::spawn(async move {
             if let Err(e) = async {
-                let mut attempt = 0;
-                let max_attempts = 50;
-                loop {
-                    match tokio::time::timeout(
-                        Duration::from_millis(100),
-                        TcpStream::connect(format!("127.0.0.1:{}", port)),
-                    )
-                    .await
-                    {
-                        Ok(Ok(_)) => break,
-                        Ok(Err(_)) => {
-                            attempt += 1;
-                            if attempt >= max_attempts {
-                                return Err(anyhow::anyhow!("Failed to connect to websocket"));
-                            }
-                            tokio::time::sleep(Duration::from_millis(100)).await;
-                        }
-                        Err(_) => {
-                            attempt += 1;
-                            if attempt >= max_attempts {
-                                return Err(anyhow::anyhow!("Failed to connect to websocket"));
-                            }
-                            tokio::time::sleep(Duration::from_millis(100)).await;
-                        }
-                    };
-                }
-
-                let ws = WsConnect::new(format!("ws://127.0.0.1:{}", port));
-                let provider = ProviderBuilder::new().connect_ws(ws).await?;
-                let mut stream = provider.subscribe_blocks().await?.into_stream();
+                let mut stream = provider_ws.subscribe_blocks().await?.into_stream();
 
                 while let Some(header) = stream.next().await {
                     let block_num = BlockNumberOrTag::Number(header.number);
-                    if let Ok(Some(block)) = provider.get_block_by_number(block_num).await {
+                    if let Ok(Some(block)) = provider_ws.get_block_by_number(block_num).await {
                         let _ = block_tx.send(Block {
+                            beneficiary: header.beneficiary.to_string(),
+                            gas_limit: header.gas_limit,
+                            gas_used: header.gas_used,
                             number: header.number,
                             hash: header.hash.to_string(),
                             time: header.timestamp,
+                            nonce: header.nonce.to_string(),
                             transactions: block.transactions.len() as u64,
                         });
                     } else {
@@ -167,5 +182,42 @@ impl AnvilProcess {
         self.stop().await?;
         self.start().await?;
         Ok(())
+    }
+
+    pub async fn get_block_with_transactions(
+        &self,
+        block_number: u64,
+    ) -> Result<(Block, Vec<Transaction>), String> {
+        let provider_ws = self.provider_ws.clone().unwrap();
+
+        let block_num = BlockNumberOrTag::Number(block_number);
+        let block = provider_ws
+            .get_block_by_number(block_num)
+            .await
+            .map_err(|e| format!("Failed to get block: {}", e))?
+            .ok_or_else(|| format!("Block {} not found", block_number))?;
+
+        let transactions: Vec<Transaction> = block
+            .transactions
+            .hashes()
+            .into_iter()
+            .map(|hash| Transaction {
+                hash: hash.to_string(),
+            })
+            .collect();
+
+        Ok((
+            Block {
+                beneficiary: block.header.beneficiary.to_string(),
+                gas_limit: block.header.gas_limit,
+                gas_used: block.header.gas_used,
+                number: block.header.number,
+                hash: block.header.hash.to_string(),
+                time: block.header.timestamp,
+                nonce: block.header.nonce.to_string(),
+                transactions: transactions.len() as u64,
+            },
+            transactions,
+        ))
     }
 }

@@ -7,9 +7,11 @@ use axum::{
     Json, Router,
 };
 use futures::Stream;
+use serde::Serialize;
 use shared::types::{
     block::Block,
     chain_config::{ChainConfig, ChainStatus},
+    transaction::Transaction,
 };
 use std::convert::Infallible;
 use std::pin::Pin;
@@ -31,7 +33,7 @@ struct ChainEntry {
     config: ChainConfig,
     log_tx: Arc<broadcast::Sender<String>>,
     block_tx: Arc<broadcast::Sender<Block>>,
-    process: AnvilProcess,
+    process: Arc<Mutex<AnvilProcess>>,
 }
 
 #[derive(Default)]
@@ -68,7 +70,7 @@ impl ChainsManager {
             config: cfg,
             log_tx: log_tx,
             block_tx: block_tx,
-            process: process,
+            process: Arc::new(Mutex::new(process)),
         };
         let id = entry.id.clone();
         map.insert(id, entry);
@@ -82,7 +84,8 @@ impl ChainsManager {
             return Err("not found".into());
         };
         entry.config.status = ChainStatus::Starting;
-        match entry.process.start().await {
+        let mut process = entry.process.lock().await;
+        match process.start().await {
             Ok(()) => {
                 entry.config.status = ChainStatus::Running;
                 Ok(())
@@ -99,7 +102,8 @@ impl ChainsManager {
         let Some(entry) = map.get_mut(id) else {
             return Err("not found".into());
         };
-        match entry.process.stop().await {
+        let mut process = entry.process.lock().await;
+        match process.stop().await {
             Ok(()) => {
                 entry.config.status = ChainStatus::Stopped;
                 let _ = entry.log_tx.send("[manager] stopped".into());
@@ -119,11 +123,16 @@ impl ChainsManager {
     }
 
     async fn delete(&self, id: &u64) -> Result<(), String> {
-        let mut map = self.inner.lock().await;
-        let Some(entry) = map.get_mut(id) else {
-            return Err("not found".into());
+        let process = {
+            let mut map = self.inner.lock().await;
+            let Some(entry) = map.get_mut(id) else {
+                return Err("not found".into());
+            };
+            entry.process.clone()
         };
-        entry.process.stop().await?;
+        process.lock().await.stop().await?;
+
+        let mut map = self.inner.lock().await;
         map.remove(id);
         Ok(())
     }
@@ -142,6 +151,22 @@ impl ChainsManager {
             return Err("not found".into());
         };
         Ok(entry.block_tx.subscribe())
+    }
+
+    async fn get_block(
+        &self,
+        chain_id: &u64,
+        block_number: u64,
+    ) -> Result<(Block, Vec<Transaction>), String> {
+        let process = {
+            let map = self.inner.lock().await;
+            let Some(entry) = map.get(chain_id) else {
+                return Err("chain not found".into());
+            };
+            entry.process.clone()
+        };
+        let process = process.lock().await;
+        process.get_block_with_transactions(block_number).await
     }
 }
 
@@ -174,6 +199,7 @@ async fn main() {
         .route("/api/chains/:id/delete", post(delete_chain))
         .route("/api/chains/:id/logstream", get(log_stream))
         .route("/api/chains/:id/blockstream", get(block_stream))
+        .route("/api/:chainid/:blocknumber", get(get_block))
         // index route serves the built client index.html
         .route("/", get(index))
         // serve other client assets under /
@@ -285,4 +311,27 @@ async fn block_stream(
                 .data("not found")))),
         };
     Sse::new(stream).keep_alive(sse::KeepAlive::new())
+}
+
+#[derive(Serialize)]
+struct BlockResponse {
+    block: Block,
+    transactions: Vec<Transaction>,
+}
+
+async fn get_block(
+    State(state): State<AppState>,
+    Path((chain_id, block_number)): Path<(u64, u64)>,
+) -> impl IntoResponse {
+    match state.manager.get_block(&chain_id, block_number).await {
+        Ok((block, transactions)) => (
+            StatusCode::OK,
+            Json(BlockResponse {
+                block,
+                transactions,
+            }),
+        )
+            .into_response(),
+        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e).into_response(),
+    }
 }

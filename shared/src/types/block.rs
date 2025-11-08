@@ -2,9 +2,13 @@ use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub struct Block {
+    pub beneficiary: String,
+    pub gas_limit: u64,
+    pub gas_used: u64,
     pub number: u64,
     pub hash: String,
     pub time: u64,
+    pub nonce: String,
     pub transactions: u64,
 }
 
