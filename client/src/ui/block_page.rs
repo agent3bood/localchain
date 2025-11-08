@@ -1,8 +1,9 @@
-use crate::api::client::{Api, BlockResponse};
+use crate::api::client::Api;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
 use leptos_router::hooks::use_navigate;
 use leptos_router::hooks::use_params_map;
+use shared::types::block_response::BlockResponse;
 use shared::types::transaction::Transaction;
 
 #[component]
