@@ -1,6 +1,9 @@
 use gloo_net::{eventsource::futures::EventSource, http::Request};
 use once_cell::sync::OnceCell;
+use serde::Deserialize;
+use shared::types::block_response::BlockResponse;
 use shared::types::chain_config::ChainConfig;
+use shared::types::{block::Block, transaction::Transaction};
 use std::sync::Arc;
 
 static INSTANCE: OnceCell<Arc<Api>> = OnceCell::new();
@@ -62,5 +65,21 @@ impl Api {
     pub fn block_stream(&self, id: u64) -> Result<EventSource, String> {
         let url = format!("/api/chains/{}/blockstream", id);
         EventSource::new(&url).map_err(|e| format!("{e:?}"))
+    }
+
+    pub async fn get_block(
+        &self,
+        chain_id: u64,
+        block_number: u64,
+    ) -> Result<BlockResponse, String> {
+        let resp =
+            Request::get(format!("{}/api/{}/{}", self.base_url, chain_id, block_number).as_str())
+                .send()
+                .await
+                .map_err(|e| e.to_string())?;
+        if !resp.ok() {
+            return Err(format!("HTTP {}", resp.status()));
+        }
+        resp.json().await.map_err(|e| e.to_string())
     }
 }

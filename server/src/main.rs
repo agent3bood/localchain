@@ -10,6 +10,7 @@ use futures::Stream;
 use serde::Serialize;
 use shared::types::{
     block::Block,
+    block_response::BlockResponse,
     chain_config::{ChainConfig, ChainStatus},
     transaction::Transaction,
 };
@@ -311,12 +312,6 @@ async fn block_stream(
                 .data("not found")))),
         };
     Sse::new(stream).keep_alive(sse::KeepAlive::new())
-}
-
-#[derive(Serialize)]
-struct BlockResponse {
-    block: Block,
-    transactions: Vec<Transaction>,
 }
 
 async fn get_block(
