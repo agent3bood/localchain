@@ -7,7 +7,6 @@ use axum::{
     Json, Router,
 };
 use futures::Stream;
-use serde::Serialize;
 use shared::types::{
     block::Block,
     block_response::BlockResponse,
@@ -189,7 +188,9 @@ async fn main() {
         manager: Arc::new(ChainsManager::default()),
     };
 
-    let static_service = ServeDir::new(&client_dist);
+    // Serve static assets from /assets route only
+    let assets_dir = client_dist.join("assets");
+    let assets_service = ServeDir::new(&assets_dir);
 
     let app = Router::new()
         .route("/api/health", get(health))
@@ -201,10 +202,8 @@ async fn main() {
         .route("/api/chains/:id/logstream", get(log_stream))
         .route("/api/chains/:id/blockstream", get(block_stream))
         .route("/api/:chainid/:blocknumber", get(get_block))
-        // index route serves the built client index.html
-        .route("/", get(index))
-        // serve other client assets under /
-        .fallback_service(static_service)
+        .nest_service("/assets", assets_service)
+        .fallback(serve_static_or_index)
         .with_state(state);
 
     let addr: SocketAddr = ([127, 0, 0, 1], 3000).into();
@@ -219,7 +218,28 @@ async fn health() -> impl IntoResponse {
     (StatusCode::OK, "ok")
 }
 
-async fn index(State(state): State<AppState>) -> impl IntoResponse {
+async fn serve_static_or_index(
+    State(state): State<AppState>,
+    req: axum::http::Request<axum::body::Body>,
+) -> impl IntoResponse {
+    use tower::ServiceExt;
+    
+    let path = req.uri().path();
+    if path.ends_with(".js") || path.ends_with(".wasm") || path.ends_with(".css") {
+        let static_service = tower_http::services::ServeDir::new(&state.client_dist);
+        match static_service.oneshot(req).await {
+            Ok(response) => {
+                if response.status() != StatusCode::NOT_FOUND {
+                    return response.into_response();
+                }
+            }
+            Err(_) => {
+                return (StatusCode::NOT_FOUND, "Not found").into_response();
+            }
+        }
+    }
+    
+    // Otherwise, serve index.html for SPA routing
     let index_html = state.client_dist.join("index.html");
     match std::fs::read_to_string(index_html) {
         Ok(contents) => Html(contents).into_response(),

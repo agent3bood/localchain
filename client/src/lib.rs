@@ -5,7 +5,7 @@ use crate::ui::logs_column::LogsColumn;
 use futures_util::{pin_mut, StreamExt};
 use leptos::task::spawn_local;
 use leptos::{leptos_dom::logging::console_error, prelude::*};
-use leptos_router::{components::*, hooks::*, path};
+use leptos_router::{components::*, path};
 use shared::types::block::Block;
 use shared::types::chain_config::{ChainConfig, ChainStatus};
 use std::rc::Rc;
