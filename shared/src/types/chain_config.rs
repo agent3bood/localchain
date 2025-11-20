@@ -9,6 +9,7 @@ pub struct ChainConfig {
     pub port: u16,
     pub block_time: u64,
     pub status: ChainStatus,
+    pub fork_url: Option<String>,
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -27,6 +28,7 @@ impl ChainConfig {
             port: existing.iter().map(|c| c.port).max().unwrap_or(8544) + 1,
             block_time: 1,
             status: ChainStatus::Stopped,
+            fork_url: None,
         }
     }
 }

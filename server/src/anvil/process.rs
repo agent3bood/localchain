@@ -17,6 +17,8 @@ pub struct AnvilProcess {
     pub chain_id: u64,
     pub port: u16,
     pub block_time: u64,
+    pub fork_url: Option<String>,
+
     child: Option<Child>,
     pub log_handles: Vec<JoinHandle<()>>,
     pub log_tx: Arc<broadcast::Sender<String>>,
@@ -33,6 +35,7 @@ impl AnvilProcess {
         block_time: u64,
         log_tx: Arc<broadcast::Sender<String>>,
         block_tx: Arc<broadcast::Sender<Block>>,
+        fork_url: Option<String>,
     ) -> Self {
         Self {
             name,
@@ -45,6 +48,7 @@ impl AnvilProcess {
             block_tx,
             block_handle: None,
             provider_ws: None,
+            fork_url,
         }
     }
 
@@ -59,6 +63,10 @@ impl AnvilProcess {
             .arg(self.chain_id.to_string())
             .arg("--block-time")
             .arg(self.block_time.to_string());
+
+        if let Some(fork_url) = &self.fork_url {
+            cmd.arg("--fork-url").arg(fork_url);
+        }
 
         println!(
             "[{}] Starting Anvil (chainId={}, port={}, blockTime={:?})",

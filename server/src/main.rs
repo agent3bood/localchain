@@ -64,6 +64,7 @@ impl ChainsManager {
             cfg.block_time,
             log_tx.clone(),
             block_tx.clone(),
+            cfg.fork_url.clone(),
         );
         let entry = ChainEntry {
             id: cfg.id,
@@ -223,7 +224,7 @@ async fn serve_static_or_index(
     req: axum::http::Request<axum::body::Body>,
 ) -> impl IntoResponse {
     use tower::ServiceExt;
-    
+
     let path = req.uri().path();
     if path.ends_with(".js") || path.ends_with(".wasm") || path.ends_with(".css") {
         let static_service = tower_http::services::ServeDir::new(&state.client_dist);
@@ -238,7 +239,7 @@ async fn serve_static_or_index(
             }
         }
     }
-    
+
     // Otherwise, serve index.html for SPA routing
     let index_html = state.client_dist.join("index.html");
     match std::fs::read_to_string(index_html) {

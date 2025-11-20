@@ -155,6 +155,7 @@ fn TopBar(
                                     port: 8545,
                                     block_time: 1,
                                     status: ChainStatus::Stopped,
+                                    fork_url: None,
                                 }),
                             );
                         set_show_modal.set(true);
@@ -196,6 +197,7 @@ fn NewChainModal(
     let (chain_id, set_chain_id) = signal(config.id.to_string());
     let (port, set_port) = signal(config.port.to_string());
     let (block_time, set_block_time) = signal(config.block_time.to_string());
+    let(fork_url, set_fork_url) = signal(config.fork_url.clone());
     let (error, set_error) = signal(None);
     let (submitting, set_submitting) = signal(false);
 
@@ -256,6 +258,7 @@ fn NewChainModal(
             port: port.get().parse().unwrap_or(8545),
             block_time: block_time.get().parse().unwrap_or(0),
             status: ChainStatus::Stopped,
+            fork_url: fork_url.get(),
         };
         let on_created_cb = on_created_submit.clone();
         let on_close_cb = on_close_submit.clone();
@@ -319,6 +322,14 @@ fn NewChainModal(
                             prop:value=move || block_time.get()
                             on:input=move |ev| set_block_time.set(event_target_value(&ev))
                             inputmode="numeric"
+                            style="width:100%; padding:6px; border:1px solid #e5e7eb; border-radius:6px;"
+                        />
+                    </label>
+                    <label>
+                        Fork URL
+                        <input
+                            prop:value=move || fork_url.get()
+                            on:input=move |ev| set_fork_url.set(Some(event_target_value(&ev)))
                             style="width:100%; padding:6px; border:1px solid #e5e7eb; border-radius:6px;"
                         />
                     </label>
