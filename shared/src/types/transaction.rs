@@ -3,4 +3,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Hash)]
 pub struct Transaction {
     pub hash: String,
+    pub block_number: u64,
+    pub index: u64,
+    pub from: String,
 }

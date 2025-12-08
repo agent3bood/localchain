@@ -1,7 +1,10 @@
 use alloy::eips::BlockNumberOrTag;
+use alloy::network::Ethereum;
+use alloy::primitives::TxHash;
 use alloy::providers::{Provider, ProviderBuilder, WsConnect};
 use shared::types::block::Block;
 use shared::types::transaction::Transaction;
+use std::str::FromStr;
 use std::{process::Stdio, sync::Arc, time::Duration};
 use tokio::net::TcpStream;
 use tokio::{
@@ -24,7 +27,7 @@ pub struct AnvilProcess {
     pub log_tx: Arc<broadcast::Sender<String>>,
     pub block_tx: Arc<broadcast::Sender<Block>>,
     pub block_handle: Option<JoinHandle<()>>,
-    provider_ws: Option<Arc<dyn Provider>>,
+    provider_ws: Option<Arc<dyn Provider<Ethereum>>>,
 }
 
 impl AnvilProcess {
@@ -186,12 +189,6 @@ impl AnvilProcess {
         Ok(())
     }
 
-    pub async fn restart(&mut self) -> Result<(), String> {
-        self.stop().await?;
-        self.start().await?;
-        Ok(())
-    }
-
     pub async fn get_block_with_transactions(
         &self,
         block_number: u64,
@@ -201,16 +198,20 @@ impl AnvilProcess {
         let block_num = BlockNumberOrTag::Number(block_number);
         let block = provider_ws
             .get_block_by_number(block_num)
+            .full()
             .await
             .map_err(|e| format!("Failed to get block: {}", e))?
             .ok_or_else(|| format!("Block {} not found", block_number))?;
 
+        let block_number_value = block.header.number;
         let transactions: Vec<Transaction> = block
             .transactions
-            .hashes()
-            .into_iter()
-            .map(|hash| Transaction {
-                hash: hash.to_string(),
+            .txns()
+            .map(|tx: &alloy::rpc::types::Transaction| Transaction {
+                hash: tx.inner.hash().to_string(),
+                block_number: tx.block_number.unwrap_or(block_number_value),
+                index: tx.transaction_index.unwrap_or_default(),
+                from: tx.inner.signer().to_string(),
             })
             .collect();
 
@@ -227,5 +228,23 @@ impl AnvilProcess {
             },
             transactions,
         ))
+    }
+
+    pub async fn get_transaction(&self, transaction_hash: String) -> Result<Transaction, String> {
+        let provider_ws = self.provider_ws.clone().unwrap();
+
+        let tx_hash = TxHash::from_str(transaction_hash.as_str()).unwrap();
+        let tx = provider_ws
+            .get_transaction_by_hash(tx_hash)
+            .await
+            .unwrap()
+            .unwrap();
+
+        Ok(Transaction {
+            hash: transaction_hash,
+            block_number: tx.block_number.unwrap(),
+            index: tx.transaction_index.unwrap(),
+            from: tx.as_recovered().signer().to_string(),
+        })
     }
 }

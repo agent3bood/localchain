@@ -5,14 +5,14 @@ edition = "2021"
 
 [dependencies]
 shared = { path = "../shared" }
-axum = "0.7"
+axum = { workspace = true }
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "process", "signal", "io-util"] }
-tower = "0.5"
-tower-http = { version = "0.5", features = ["fs", "trace"] }
-tokio-stream = { version = "0.1", features = ["io-util", "sync"] }
+tower = { workspace = true }
+tower-http = { workspace = true, features = ["fs", "trace"] }
+tokio-stream = { workspace = true, features = ["io-util", "sync"] }
 futures = "0.3"
-uuid = { version = "1", features = ["v4", "serde"] }
-once_cell = "1"
+uuid = { workspace = true, features = ["v4", "serde"] }
+once_cell = { workspace = true }
 serde = { workspace = true }
 serde_json = { workspace = true }
 alloy = { workspace = true, features = ["full"] }

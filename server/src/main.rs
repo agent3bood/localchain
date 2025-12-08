@@ -12,6 +12,7 @@ use shared::types::{
     block_response::BlockResponse,
     chain_config::{ChainConfig, ChainStatus},
     transaction::Transaction,
+    transaction_response::TransactionResponse,
 };
 use std::convert::Infallible;
 use std::pin::Pin;
@@ -169,6 +170,22 @@ impl ChainsManager {
         let process = process.lock().await;
         process.get_block_with_transactions(block_number).await
     }
+
+    async fn get_transaction(
+        &self,
+        chain_id: &u64,
+        transaction_hash: String,
+    ) -> Result<Transaction, String> {
+        let process = {
+            let map = self.inner.lock().await;
+            let Some(entry) = map.get(chain_id) else {
+                return Err("chain not found".into());
+            };
+            entry.process.clone()
+        };
+        let process = process.lock().await;
+        process.get_transaction(transaction_hash).await
+    }
 }
 
 #[tokio::main]
@@ -202,7 +219,11 @@ async fn main() {
         .route("/api/chains/:id/delete", post(delete_chain))
         .route("/api/chains/:id/logstream", get(log_stream))
         .route("/api/chains/:id/blockstream", get(block_stream))
-        .route("/api/:chainid/:blocknumber", get(get_block))
+        .route("/api/:chainid/blocks/:blocknumber", get(get_block))
+        .route(
+            "/api/:chainid/transactions/:transactionhash",
+            get(get_transaction),
+        )
         .nest_service("/assets", assets_service)
         .fallback(serve_static_or_index)
         .with_state(state);
@@ -339,15 +360,30 @@ async fn get_block(
     State(state): State<AppState>,
     Path((chain_id, block_number)): Path<(u64, u64)>,
 ) -> impl IntoResponse {
-    match state.manager.get_block(&chain_id, block_number).await {
-        Ok((block, transactions)) => (
-            StatusCode::OK,
-            Json(BlockResponse {
-                block,
-                transactions,
-            }),
-        )
-            .into_response(),
-        Err(e) => (StatusCode::INTERNAL_SERVER_ERROR, e).into_response(),
-    }
+    state
+        .manager
+        .get_block(&chain_id, block_number)
+        .await
+        .map(|(block, transactions)| {
+            (
+                StatusCode::OK,
+                Json(BlockResponse {
+                    block: block,
+                    transactions: transactions,
+                }),
+            )
+        })
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))
+}
+
+async fn get_transaction(
+    State(state): State<AppState>,
+    Path((chain_id, transaction_hash)): Path<(u64, String)>,
+) -> impl IntoResponse {
+    state
+        .manager
+        .get_transaction(&chain_id, transaction_hash)
+        .await
+        .map(|t| (StatusCode::OK, Json(TransactionResponse { transaction: t })))
+        .map_err(|e| (StatusCode::BAD_REQUEST, e))
 }

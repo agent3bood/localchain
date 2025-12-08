@@ -2,6 +2,7 @@ use crate::api::client::Api;
 use crate::ui::block_page::BlockPage;
 use crate::ui::blocks_column::BlocksColumn;
 use crate::ui::logs_column::LogsColumn;
+use crate::ui::transaction_page::TransactionPage;
 use futures_util::{pin_mut, StreamExt};
 use leptos::task::spawn_local;
 use leptos::{leptos_dom::logging::console_error, prelude::*};
@@ -124,6 +125,10 @@ pub fn main() {
             <Router>
                 <Routes fallback=|| view! { <div>"Not found"</div> }>
                     <Route path=path!("") view=move || view! { <HomePage /> } />
+                    <Route
+                        path=path!(":chainid/transactions/:transactionhash")
+                        view=move || view! { <TransactionPage /> }
+                    />
                     <Route
                         path=path!(":chainid/:blocknumber")
                         view=move || view! { <BlockPage /> }

@@ -1,6 +1,7 @@
 use crate::api::client::Api;
 use leptos::prelude::*;
 use leptos::task::spawn_local;
+use leptos_router::components::A;
 use leptos_router::hooks::use_navigate;
 use leptos_router::hooks::use_params_map;
 use shared::types::block_response::BlockResponse;
@@ -174,21 +175,8 @@ pub fn BlockPage() -> impl IntoView {
                                                         }
                                                         key=|(idx, _)| *idx
                                                         children=move |(idx, tx): (usize, Transaction)| {
-                                                            view! {
-                                                                <div style="padding:12px; background:#f9fafb; border:1px solid #e5e7eb; border-radius:6px; display:flex; align-items:center; gap:12px;">
-                                                                    <div style="color:#6b7280; font-weight:600; min-width:80px;">
-                                                                        {format!("#{}", idx + 1)}
-                                                                    </div>
-                                                                    <div style="flex:1;">
-                                                                        <div style="color:#6b7280; font-size:12px; margin-bottom:4px;">
-                                                                            {"Hash"}
-                                                                        </div>
-                                                                        <div style="font-size:12px; font-family:monospace; word-break:break-all;">
-                                                                            {tx.hash.clone()}
-                                                                        </div>
-                                                                    </div>
-                                                                </div>
-                                                            }
+                                                            view! { <TransactionDetails tx=tx idx=idx chain_id=cid /> }
+                                                                .into_any()
                                                         }
                                                     />
                                                 </div>
@@ -219,5 +207,36 @@ pub fn BlockPage() -> impl IntoView {
                 }
             }}
         </div>
+    }
+}
+
+#[component]
+pub fn TransactionDetails(tx: Transaction, idx: usize, chain_id: u64) -> impl IntoView {
+    let hash = tx.hash.clone();
+    let from = tx.from.clone();
+    let block_number = tx.block_number;
+    let link = format!("/{}/transactions/{}", chain_id, hash);
+    view! {
+        <A href=link>
+            <div style="text-decoration:none; color:inherit; display:flex; padding:12px; background:#f9fafb; border:1px solid #e5e7eb; border-radius:6px; align-items:center; gap:12px;">
+                <div style="color:#6b7280; font-weight:600; min-width:80px;">
+                    {format!("#{}", idx + 1)}
+                </div>
+                <div style="flex:1;">
+                    <div style="color:#6b7280; font-size:12px; margin-bottom:4px;">{"Hash"}</div>
+                    <div style="font-size:12px; font-family:monospace; word-break:break-all;">
+                        {hash}
+                    </div>
+                    <div style="color:#6b7280; font-size:12px; margin-top:8px;">{"From"}</div>
+                    <div style="font-size:12px; font-family:monospace; word-break:break-all;">
+                        {from}
+                    </div>
+                </div>
+                <div style="text-align:right; min-width:110px;">
+                    <div style="color:#6b7280; font-size:12px;">{"Block"}</div>
+                    <div style="font-size:14px; font-family:monospace;">{block_number}</div>
+                </div>
+            </div>
+        </A>
     }
 }
